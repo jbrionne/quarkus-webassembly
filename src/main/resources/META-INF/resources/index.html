@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+    <script src="wasm/bytecoder.js"></script>
+    <script>
+        var bytecoderWasmFile = 'wasm/bytecoder.wasm';
+        var instantiated = function(result) {
+            bytecoder.init(result.instance);
+            bytecoder.exports.initMemory(0);
+            bytecoder.exports.bootstrap(0);
+            bytecoder.initializeFileIO();
+
+            // We have to activate the garbage collector!
+            var gcInterval = 200; // How often will the GC be triggered (in ms)
+            var gcMaxObjectsPerRun = 30; // How many objects will be collected during one run
+            var gcRunning = false; 
+            var runcounter = 0; // Used for debugging
+            setInterval(function() {
+                if (!gcRunning) {
+                    gcRunning = true;
+                    var freed = bytecoder.exports.IncrementalGC(0, gcMaxObjectsPerRun);
+                    if (runcounter++ % 10 === 0) {
+                        var freemem = bytecoder.exports.freeMem(0);
+                        var epoch = bytecoder.exports.GCEpoch(0);
+                        console.log(freemem + " bytes free memory after GC, epoch = " + epoch);
+                    }
+                    gcRunning = false;
+                }
+            }, gcInterval);
+
+            result = bytecoder.exports.thePurposeOfLife(0);
+    		document.getElementById('wasm').innerHTML =
+    		'The Purpose of life according to bytecoder wasm from java: ' + result;
+
+        };
+        WebAssembly.instantiateStreaming(fetch(bytecoderWasmFile), bytecoder.imports).then(instantiated).catch(function(error) {
+            var request = new XMLHttpRequest();
+            request.open('GET', bytecoderWasmFile);
+            request.responseType = 'arraybuffer';
+            request.send();
+            request.onload = function() {
+                var bytes = request.response;
+                WebAssembly.instantiate(bytes, bytecoder.imports).then(instantiated);
+            };
+        });
+    </script>
+</head>
+<body>  
+    <label id='wasm'></label>
+</body>  
+</html>
